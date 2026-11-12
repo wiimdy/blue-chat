@@ -1,0 +1,25 @@
+# EXAMPLE ONLY. Adjust for each site and keep all credentials out of Git.
+# Native chat server connection settings are intentionally placeholders.
+[mattermost]
+[mattermost.local]
+Server = "mattermost.local.example:443"
+Team = "your-team"
+Token = "REPLACE_WITH_MATTERMOST_TOKEN"
+
+[api]
+[api.local]
+BindAddress = "127.0.0.1:4242"
+Token = "REPLACE_WITH_MATTERBRIDGE_API_TOKEN"
+Buffer = 100
+
+[[gateway]]
+name = "blue-chat-local"
+enable = true
+
+    [[gateway.inout]]
+    account = "mattermost.local"
+    channel = "general"
+
+    [[gateway.inout]]
+    account = "api.local"
+    channel = "api"

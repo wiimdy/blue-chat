@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blue-chat-relay"
+version = "0.2.0"
+description = "Linux Bluetooth RFCOMM text-only bridge for two authorized Matterbridge instances"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+blue-chat = "matterbridge_bt_relay.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
