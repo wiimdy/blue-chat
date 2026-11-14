@@ -15,11 +15,15 @@ Chat server B ⇄ Matterbridge B ⇄ API (loopback) ⇄ Agent B
 
 ## On-wire protocol
 
-Message: `[4-byte network-order payload length][UTF-8 JSON]` with the fields `id`, `origin`, `channel`, `sender`, `text`, `timestamp`; maximum payload 64 KiB; maximum text 8 KiB. ACK: similarly framed JSON `{"type":"ack","id":"<uuid>"}`. Each device uses its own distinct origin tag. No credentials are included in frames.
+Message: `[4-byte network-order payload length][UTF-8 JSON]` with the fields `id`, `origin`, `channel`, `sender`, `text`, `timestamp`; maximum payload 64 KiB; relay text limit 8,000 UTF-8 bytes. ACK: similarly framed JSON `{"type":"ack","id":"<uuid>"}`. Each device uses its own distinct origin tag. No credentials are included in frames.
+
+The local `--gateway` name is included in destination HTTP POSTs and filters source events. It defaults to `blue-chat-local`. This is distinct from the logical `--channel` shared by the two agents. Matterbridge may acknowledge an HTTP POST while dropping its route if the gateway name is incorrect.
 
 ## SQLite durability
 
 Outbox persists pending messages until an ACK is received. The receiver persists message IDs and marks them as posted after the local Matterbridge API returns HTTP 2xx. Received ACKs mark the sender's messages done. Resending is possible after reconnection.
+
+Malformed source events are skipped individually so later valid events in the same destructive poll are still persisted. Session shutdown waits for its receiver's active HTTP request before another session starts or the database closes. Transient connection attempts have a 10-second timeout.
 
 **Limits of guarantees:** Matterbridge `/api/messages` is an in-memory destructive queue. Its events can be lost around process crashes. A receiver can also crash between successful HTTP POST and the SQLite posted mark, causing duplicate delivery after retry. Exactly-once and lossless end-to-end delivery are **not provided**.
 

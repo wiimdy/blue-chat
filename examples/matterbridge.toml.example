@@ -13,6 +13,7 @@ Token = "REPLACE_WITH_MATTERBRIDGE_API_TOKEN"
 Buffer = 100
 
 [[gateway]]
+# Must match the relay --gateway value (default: blue-chat-local).
 name = "blue-chat-local"
 enable = true
 

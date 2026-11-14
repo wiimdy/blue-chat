@@ -16,6 +16,8 @@ from uuid import UUID
 
 from .protocol import MAX_PAYLOAD_BYTES, Message, decode_frame, encode_frame
 
+CONNECT_TIMEOUT_SECONDS = 10.0
+
 
 @dataclass(frozen=True)
 class Ack:
@@ -45,7 +47,7 @@ def decode_packet(frame: bytes) -> Packet:
         raise ValueError("invalid packet length")
     try:
         doc = json.loads(frame[4:].decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
+    except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ValueError("invalid JSON packet") from exc
     if not isinstance(doc, dict):
         raise ValueError("packet must be JSON object")
@@ -123,7 +125,9 @@ def open_socket(*, mode: str, transport: str, peer: str | None, port: int) -> so
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if mode == "connect":
         try:
+            sock.settimeout(CONNECT_TIMEOUT_SECONDS)
             sock.connect(address)
+            sock.settimeout(None)
             return sock
         except BaseException:
             sock.close()

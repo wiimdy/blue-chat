@@ -1,4 +1,5 @@
 """End-to-end two-relay smoke test over real local sockets and fake HTTP APIs."""
+
 import socket
 import tempfile
 import threading
@@ -19,8 +20,14 @@ class FakeAPI:
 
     def push(self, sender, text):
         with self.lock:
-            self.queue.append({"protocol": "mattermost", "username": sender,
-                               "text": text, "event": ""})
+            self.queue.append(
+                {
+                    "protocol": "mattermost",
+                    "username": sender,
+                    "text": text,
+                    "event": "",
+                }
+            )
 
     def get_messages(self):
         with self.lock:
@@ -31,9 +38,13 @@ class FakeAPI:
         with self.lock:
             self.posts.append((origin, sender, text))
             # A message returned from the chat service must not bounce forever.
-            self.queue.append({"protocol": "mattermost",
-                               "username": f"[blue-chat/{origin}] {sender}",
-                               "text": text})
+            self.queue.append(
+                {
+                    "protocol": "mattermost",
+                    "username": f"[blue-chat/{origin}] {sender}",
+                    "text": text,
+                }
+            )
 
 
 def until(condition, timeout=4.0):
@@ -50,19 +61,37 @@ class IntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as path:
             a_sock, b_sock = socket.socketpair()
             a_api, b_api = FakeAPI(), FakeAPI()
-            with Outbox(Path(path) / "a.db") as a_store, Outbox(Path(path) / "b.db") as b_store:
-                a = RelaySession(api=a_api, store=a_store, transport=PacketSocket(a_sock),
-                                 origin="inside", channel="general", poll_interval=0.02,
-                                 retry_interval=0.08)
-                b = RelaySession(api=b_api, store=b_store, transport=PacketSocket(b_sock),
-                                 origin="outside", channel="general", poll_interval=0.02,
-                                 retry_interval=0.08)
+            with (
+                Outbox(Path(path) / "a.db") as a_store,
+                Outbox(Path(path) / "b.db") as b_store,
+            ):
+                a = RelaySession(
+                    api=a_api,
+                    store=a_store,
+                    transport=PacketSocket(a_sock),
+                    origin="inside",
+                    channel="general",
+                    poll_interval=0.02,
+                    retry_interval=0.08,
+                )
+                b = RelaySession(
+                    api=b_api,
+                    store=b_store,
+                    transport=PacketSocket(b_sock),
+                    origin="outside",
+                    channel="general",
+                    poll_interval=0.02,
+                    retry_interval=0.08,
+                )
                 threads = [threading.Thread(target=x.run, daemon=True) for x in [a, b]]
-                for t in threads: t.start()
+                for t in threads:
+                    t.start()
                 try:
                     a_api.push("alice", "안녕하세요 👋")
                     until(lambda: len(b_api.posts) == 1)
-                    self.assertEqual(b_api.posts[0], ("inside", "alice", "안녕하세요 👋"))
+                    self.assertEqual(
+                        b_api.posts[0], ("inside", "alice", "안녕하세요 👋")
+                    )
                     until(lambda: len(a_store.pending()) == 0)
                     b_api.push("bob", "반갑습니다!")
                     until(lambda: len(a_api.posts) == 1)
@@ -72,7 +101,10 @@ class IntegrationTests(unittest.TestCase):
                     self.assertEqual(len(a_api.posts), 1)
                     self.assertEqual(len(b_api.posts), 1)
                 finally:
-                    for x in [a, b]: x.stop.set()
-                    for x in [a, b]: x.transport.close()
-                    for t in threads: t.join(timeout=2)
+                    for x in [a, b]:
+                        x.stop.set()
+                    for x in [a, b]:
+                        x.transport.close()
+                    for t in threads:
+                        t.join(timeout=2)
                     self.assertFalse(any(t.is_alive() for t in threads))

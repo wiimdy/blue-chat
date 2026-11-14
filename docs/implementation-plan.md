@@ -10,6 +10,10 @@
 - [x] Linux RFCOMM socket transport implementation (NOT hardware-tested)
 - [x] TCP loopback-only test transport
 - [x] Offline integration with mock HTTP APIs, real TCP loopback sockets
+- [x] Two real CLI processes exchange 100 Unicode messages each direction and recover after peer restart
+- [x] Real local Matterbridge API gateway routing verified at revision `c4157a4d5b49fce79c80a30730dc7c404bacd663`
+- [x] Regression coverage for malformed source batches, failed destination POST retries, persisted inbound deduplication, and slow-POST shutdown
+- [x] Local lint and typecheck; CI configured to run both
 - [x] GitHub Actions test workflow added (not yet run on GitHub)
 
 ## Unverified / not implemented
@@ -17,9 +21,9 @@
 - [ ] Written approval for a Bluetooth link in the intended environment
 - [ ] Linux adapter and OS pairing capability for RFCOMM channel
 - [ ] Real A↔B RFCOMM transfer and 100-message stress test
-- [ ] Actual Matterbridge server + Mattermost/Slack API compatibility
+- [ ] Actual Mattermost/Slack delivery through Matterbridge (local API routing verified separately)
 - [ ] Verify bot message suppression on the actual chat service
-- [ ] Host reboot/connection loss and reliable queue recovery validation
+- [ ] Host reboot and Bluetooth signal-loss recovery (local TCP peer restart and SQLite reopen verified)
 - [ ] More robust integrity/authentication (e.g., application-layer MAC)
 - [ ] Correct recovery from destructive Matterbridge polling around crashes
 - [ ] Exactly-once posting safeguards and retention/cleanup
@@ -34,4 +38,4 @@
 5. Verify that unrelated Mattermost channels and bridge bot output are not mirrored.
 6. Capture logs to verify no token or message text leaks, and test shutdown/restart.
 
-**Status**: Local transport/API integration tests pass. Real hardware and live-service tests remain blocked on access to two devices/servers.
+**Status**: Local transport/API integration, actual local Matterbridge routing, and CLI peer restart pass. Real Bluetooth hardware and live Mattermost/Slack delivery remain unverified; they require access to the intended devices and chat servers.

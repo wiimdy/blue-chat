@@ -11,7 +11,7 @@ import time
 from typing import Protocol
 
 from .outbox import Outbox
-from .protocol import Message
+from .protocol import Message, encode_frame
 from .transport import Ack, PacketSocket
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,8 @@ class RelaySession:
                  ignored_userids: frozenset[str] = frozenset()) -> None:
         if not origin or not channel:
             raise ValueError("origin and logical channel required")
+        # Reject unusable routing metadata before consuming destructive API reads.
+        encode_frame(Message.new(origin=origin, channel=channel, sender="relay", text=""))
         self.api = api
         self.store = store
         self.transport = transport
@@ -52,19 +54,25 @@ class RelaySession:
             if (not isinstance(text, str) or not text.strip() or
                     not isinstance(sender, str) or not sender.strip()):
                 continue
+            userid = event.get("userid")
             if (event.get("protocol") == "api" or "[blue-chat/" in sender or
-                    sender in self.ignored_senders or event.get("userid") in self.ignored_userids):
+                    sender in self.ignored_senders or
+                    (isinstance(userid, str) and userid in self.ignored_userids)):
                 continue
             if event.get("event"):
                 continue
             if self.gateway and event.get("gateway") != self.gateway:
                 continue
-            if len(text.encode("utf-8")) > MAX_TEXT_BYTES:
-                logger.warning("skipping oversized incoming message")
-                continue
-            msg = Message.new(origin=self.origin, channel=self.channel,
-                              sender=sender[:128], text=text)
-            self.store.enqueue(msg)
+            try:
+                if len(text.encode("utf-8")) > MAX_TEXT_BYTES:
+                    logger.warning("skipping oversized incoming message")
+                    continue
+                msg = Message.new(origin=self.origin, channel=self.channel,
+                                  sender=sender[:128], text=text)
+                self.store.enqueue(msg)
+            except ValueError as exc:
+                # This API batch is already consumed; preserve later valid events.
+                logger.warning("skipping invalid incoming message: %s", type(exc).__name__)
 
     def _receive(self) -> None:
         try:
@@ -122,4 +130,5 @@ class RelaySession:
         finally:
             self.stop.set()
             self.transport.close()
-            reader.join(timeout=3.0)
+            # A pending API POST must finish before reconnect or store shutdown.
+            reader.join()

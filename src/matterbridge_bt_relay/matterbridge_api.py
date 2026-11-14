@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from urllib.parse import urlsplit
-from urllib.request import Request, ProxyHandler, HTTPRedirectHandler, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -16,18 +16,27 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
+DEFAULT_GATEWAY = "blue-chat-local"
+
+
 class MatterbridgeAPI:
-    def __init__(self, base_url: str, token: str, *, timeout: float = 3.0) -> None:
+    def __init__(self, base_url: str, token: str, *, timeout: float = 3.0,
+                 gateway: str = DEFAULT_GATEWAY) -> None:
         parsed = urlsplit(base_url)
         if parsed.scheme != "http" or parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
             raise ValueError("Matterbridge API must be bound to localhost HTTP")
         if parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {"", "/"}:
             raise ValueError("invalid localhost API URL")
+        if parsed.port is not None and not 1 <= parsed.port <= 65535:
+            raise ValueError("Matterbridge API port must be 1..65535")
+        if not gateway.strip():
+            raise ValueError("Matterbridge gateway must not be empty")
         if not token:
             raise ValueError("Matterbridge API token must not be empty")
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
+        self.gateway = gateway
         # Ignore machine HTTP_PROXY environment variables; never leave loopback.
         self._opener = build_opener(ProxyHandler({}), _NoRedirect())
 
@@ -57,4 +66,5 @@ class MatterbridgeAPI:
         self._request("/api/message", {
             "username": f"[blue-chat/{origin}] {sender}",
             "text": text,
+            "gateway": self.gateway,
         })

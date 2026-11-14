@@ -1,6 +1,6 @@
 # blue-chat — Matterbridge Bluetooth text relay
 
-> **Current status: Offline/localhost integration verified. Linux Bluetooth RFCOMM transport implemented but NOT tested with actual Bluetooth hardware or a live Mattermost server.** This is a proof of concept, not a production-ready secure messenger.
+> **Current status: Localhost integration and routing through a real local Matterbridge API verified. Linux Bluetooth RFCOMM transport implemented but NOT tested with actual Bluetooth hardware or a live Mattermost server.** This is a proof of concept, not a production-ready secure messenger.
 
 A minimal, **text-only** chat relay for two independently operated Matterbridge instances. Each site talks only to its own chat service and the local Matterbridge HTTP API. The relay agents exchange framed JSON messages over an **explicitly approved** Bluetooth RFCOMM connection. For local testing, a TCP connection is restricted to `127.0.0.1`.
 
@@ -16,11 +16,11 @@ A minimal, **text-only** chat relay for two independently operated Matterbridge 
 
 - Linux RFCOMM client and listener using Python `socket.AF_BLUETOOTH` / `BTPROTO_RFCOMM` (not yet hardware-tested).
 - Localhost-only TCP transport for development and integration tests; **no external TCP listener**.
-- Configurable local Matterbridge API client (`GET /api/messages`, `POST /api/message`) authenticated using a token from an environment variable.
+- Configurable local Matterbridge API client (`GET /api/messages`, `POST /api/message`) authenticated using a token from an environment variable, with explicit destination gateway routing.
 - Text-only UTF-8 JSON protocol, 4-byte big-endian length prefix and 64 KiB frame cap.
 - SQLite-backed outbound messages, ACK/retry and inbound message-ID deduplication.
 - Simple relay username marker and optional exact sender/user-ID ignore rules to reduce echo loops.
-- 14 automated unit and offline integration tests, including **real TCP loopback and HTTP mock servers**.
+- Automated unit and offline integration tests, including **real TCP loopback, HTTP mock servers, two CLI processes exchanging 100 Unicode messages each way, and peer restart**.
 
 ## Quick test (requires Python 3.11+)
 
@@ -31,6 +31,23 @@ python3 scripts/offline_demo.py
 ```
 
 The test suite does **not** require Bluetooth hardware, credentials, or a Matterbridge installation.
+
+For the same checks used in CI:
+
+```bash
+python3 -m pip install -e '.[dev]'
+ruff check .
+mypy .
+pytest -q
+```
+
+To verify routing against your own Matterbridge binary using two temporary loopback API accounts (no chat credentials):
+
+```bash
+python3 scripts/verify_matterbridge_api.py /path/to/matterbridge
+```
+
+This check was run against upstream revision `c4157a4d5b49fce79c80a30730dc7c404bacd663`. It verifies HTTP API routing, not Mattermost delivery or Bluetooth hardware.
 
 ## Matterbridge configuration
 
@@ -43,6 +60,8 @@ export MATTERBRIDGE_API_TOKEN='CHOOSE_THE_SITE_LOCAL_API_TOKEN'
 ```
 
 Only one consumer should read `GET /api/messages` on each site because **reading removes messages from Matterbridge's in-memory ring buffer**. As a result, a crash between fetching an event and storing it in SQLite can lose that event. This PoC does **not** guarantee zero loss or exactly-once delivery. ACK means the destination's local Matterbridge API returned success, not that all downstream chat clients received the post.
+
+`--gateway` defaults to `blue-chat-local`, matching the example. Set it to the exact local Matterbridge `[[gateway]].name` on each site. It selects both the source event filter and the destination POST route; the sites can use different local gateway names. Matterbridge can return HTTP 200 even when a missing or incorrect gateway silently prevents delivery. `--channel` is the logical relay channel and must match on both agents; it does not select a Mattermost channel.
 
 ## Run two agents on the same computer (development)
 
@@ -86,6 +105,8 @@ python3 -m matterbridge_bt_relay.cli connect \
 
 This assumes Bluetooth access, proper pairing, service availability and Matterbridge instances already configured on each device. **No actual Bluetooth link was tested here.** macOS/Windows support is not implemented by this project yet (a separate transport adapter is required).
 
+Without `--port`, TCP uses port 8765 and RFCOMM uses channel 3. Connection attempts time out after 10 seconds and transient connection failures retry. Invalid configuration fails immediately. Stop an agent with Ctrl+C; shutdown waits for an in-flight HTTP POST before closing its database.
+
 ## Operation and safety
 
 - **Obtain written approval** for Bluetooth device-to-device communication in any separated/restricted network environment. RFCOMM is still a direct device connection, even though it carries no IP packets in this project.
@@ -106,6 +127,7 @@ src/matterbridge_bt_relay/
   outbox.py          SQLite outbound/inbound message ledger
   cli.py             Linux RFCOMM and localhost TCP entry point
 scripts/offline_demo.py
+scripts/verify_matterbridge_api.py
 examples/matterbridge.toml.example
 tests/                 Unit and offline end-to-end tests
 docs/                  Architecture and development plan
@@ -114,4 +136,4 @@ docs/                  Architecture and development plan
 
 ## Roadmap
 
-See [`docs/implementation-plan.md`](docs/implementation-plan.md). Next real milestones: Linux Bluetooth pair test, live Matterbridge API test, reconnect under Bluetooth signal loss, reliable deduplication after process crashes, and authenticated peer protocol. None is claimed complete yet.
+See [`docs/implementation-plan.md`](docs/implementation-plan.md). Next real milestones: Linux Bluetooth pair test, live Mattermost delivery and bot echo suppression, reconnect under Bluetooth signal loss, reliable deduplication after process crashes, and authenticated peer protocol. None is claimed complete yet.

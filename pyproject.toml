@@ -10,8 +10,18 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+dev = ["mypy>=1.11,<3", "pytest>=8,<10", "ruff>=0.9,<1"]
+
 [project.scripts]
 blue-chat = "matterbridge_bt_relay.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

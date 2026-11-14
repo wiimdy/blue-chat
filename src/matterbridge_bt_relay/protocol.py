@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 import json
 import struct
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -24,7 +24,7 @@ class Message:
 
     @classmethod
     def new(cls, *, origin: str, channel: str, sender: str, text: str) -> "Message":
-        return cls(
+        message = cls(
             id=str(uuid4()),
             origin=origin,
             channel=channel,
@@ -32,6 +32,7 @@ class Message:
             text=text,
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
+        return cls.from_dict(asdict(message))
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Message":
@@ -41,12 +42,14 @@ class Message:
         if any(not isinstance(data[name], str) for name in fields):
             raise ValueError("message fields must be strings")
         try:
+            for name in fields:
+                data[name].encode("utf-8")
             UUID(data["id"])
             parsed = datetime.fromisoformat(data["timestamp"])
             if parsed.tzinfo is None:
                 raise ValueError("timestamp must contain timezone")
         except (ValueError, TypeError) as exc:
-            raise ValueError("invalid message ID or timestamp") from exc
+            raise ValueError("invalid message UTF-8, ID or timestamp") from exc
         if not data["origin"] or not data["channel"] or not data["sender"]:
             raise ValueError("origin, channel and sender must be non-empty")
         return cls(**data)
@@ -54,7 +57,9 @@ class Message:
 
 def encode_frame(message: Message) -> bytes:
     """Length-prefix a UTF-8 JSON message with a big-endian 32-bit size."""
-    payload = json.dumps(asdict(message), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    body = asdict(message)
+    Message.from_dict(body)
+    payload = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if not 0 < len(payload) <= MAX_PAYLOAD_BYTES:
         raise ValueError("payload too large or empty")
     return struct.pack("!I", len(payload)) + payload
@@ -68,7 +73,7 @@ def decode_frame(frame: bytes) -> Message:
         raise ValueError("invalid frame length")
     try:
         body = json.loads(frame[4:].decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
+    except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ValueError("invalid UTF-8 JSON") from exc
     if not isinstance(body, dict):
         raise ValueError("frame body must be an object")

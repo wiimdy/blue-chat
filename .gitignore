@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .venv/
 venv/
 dist/
@@ -11,5 +13,6 @@ build/
 *.db-*
 .env
 *.toml
+!pyproject.toml
 !*.toml.example
 .DS_Store
